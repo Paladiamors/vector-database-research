@@ -1,0 +1,13 @@
+services:
+  vald-agent:
+    image: vdaas/vald-agent-ngt:v1.7.10
+    ports:
+      - 8081:8081 # gRPC
+    environment:
+      - VALD_AGENT_NGT_AUTO_INDEX_CHECK_DURATION=10s
+      - VALD_AGENT_NGT_AUTO_INDEX_DURATION=30s
+      - VALD_AGENT_NGT_AUTO_SAVE_INDEX_DURATION=60s
+      - VALD_AGENT_NGT_DIMENSION=384
+      - VALD_AGENT_NGT_DISTANCE_TYPE=l2
+      - VALD_AGENT_NGT_OBJECT_TYPE=float
+      - VALD_AGENT_NGT_GRPC_PORT=8081
