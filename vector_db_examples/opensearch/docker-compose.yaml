@@ -1,0 +1,8 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+    ports:
+      - 9200:9200

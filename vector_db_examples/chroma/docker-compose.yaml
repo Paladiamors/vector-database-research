@@ -1,0 +1,9 @@
+version: '3.9'
+
+services:
+  server:
+    image: chromadb/chroma:0.4.22
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/chroma_data:/chroma/chroma
+    ports:
+      - 8000:8000

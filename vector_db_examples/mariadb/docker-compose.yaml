@@ -1,0 +1,8 @@
+services:
+  mariadb:
+    image: mariadb:11.4
+    environment:
+      - MARIADB_ROOT_PASSWORD=password
+      - MARIADB_DATABASE=vectordb
+    ports:
+      - 3306:3306
