@@ -1,42 +1,43 @@
-from vespa.package import ApplicationPackage, Field, Schema, Document, RankProfile, HNSW, Attribute
+from vespa.package import ApplicationPackage, Field, Schema, Document, RankProfile, HNSW
 from vespa.deployment import VespaDocker
 import json
 import os
 import requests
 import time
 
+
 def main():
     # 1. Define Application Package
     # Schema: text (index, summary), category (attribute, summary), vector (attribute, index: hnsw)
     document = Document(
         fields=[
-            Field(name = "text", type = "string", indexing = ["index", "summary"]),
-            Field(name = "category", type = "string", indexing = ["attribute", "summary"]),
+            Field(name="text", type="string", indexing=["index", "summary"]),
+            Field(name="category", type="string", indexing=["attribute", "summary"]),
             Field(
-                name = "vector",
-                type = "tensor<float>(x[384])",
-                indexing = ["attribute", "index"],
-                ann = HNSW(
-                    distance_metric = "euclidean",
-                    max_links_per_node = 16,
-                    neighbors_to_explore_at_insert = 200
+                name="vector",
+                type="tensor<float>(x[384])",
+                indexing=["attribute", "index"],
+                ann=HNSW(
+                    distance_metric="euclidean",
+                    max_links_per_node=16,
+                    neighbors_to_explore_at_insert=200
                 )
             )
         ]
     )
 
     schema = Schema(
-        name = "doc",
-        document = document,
-        rank_profiles = [
+        name="doc",
+        document=document,
+        rank_profiles=[
             RankProfile(
-                name = "default",
-                first_phase = "closeness(field, vector)"
+                name="default",
+                first_phase="closeness(field, vector)"
             )
         ]
     )
 
-    app_package = ApplicationPackage(name = "vectordb", schema=[schema])
+    app_package = ApplicationPackage(name="vectordb", schema=[schema])
 
     # 2. Deploy (Assuming Docker container is running at localhost:8080)
     # Usually we use VespaDocker to deploy, but since we use docker-compose, we use requests to deploy zip?
@@ -90,7 +91,7 @@ def main():
     # Wait for application to be active
     time.sleep(5)
 
-    app = Vespa(url = "http://localhost", port = 8080)
+    app = Vespa(url="http://localhost", port=8080)
 
     # Load dataset
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -127,16 +128,17 @@ def main():
     # We pass query_vector in 'ranking.features.query(query_vector)'
 
     res = app.query(
-        yql = "select * from sources * where {targetHits:3}nearestNeighbor(vector, query_vector)",
-        ranking = "default",
-        body = {
+        yql="select * from sources * where {targetHits:3}nearestNeighbor(vector, query_vector)",
+        ranking="default",
+        body={
             "presentation.format": "json",
             "ranking.features.query(query_vector)": query_vector
         }
     )
 
     for hit in res.hits:
-        print(f"ID: {hit['id']}, Score: {hit['relevance']:.4f}, Text: {hit['fields']['text']}, Category: {hit['fields']['category']}")
+        print(
+            f"ID: {hit['id']}, Score: {hit['relevance']:.4f}, Text: {hit['fields']['text']}, Category: {hit['fields']['category']}")
 
     # 5. Search with Metadata Filter
     print("\n--- Metadata Search Results (Category == 'tech') ---")
@@ -144,7 +146,7 @@ def main():
     # select * from doc where category contains 'tech'
 
     res = app.query(
-        yql = "select * from sources * where category contains 'tech'"
+        yql="select * from sources * where category contains 'tech'"
     )
 
     for hit in res.hits:
@@ -189,6 +191,7 @@ def main():
     except:
         print("Item successfully deleted (404).")
 
+
 if __name__ == "__main__":
-    import shutil # ensure imported
+    import shutil  # ensure imported
     main()

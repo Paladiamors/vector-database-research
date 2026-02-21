@@ -3,10 +3,11 @@ import json
 import os
 import numpy as np
 
+
 def main():
     # Connect
     print("Connecting to ClickHouse...")
-    client = clickhouse_connect.get_client(host='localhost', port=8123)
+    client = clickhouse_connect.get_client(host='localhost', password="default", port=8123)
 
     # Load dataset
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -105,7 +106,7 @@ def main():
     # Wait for mutation? Or query immediately (might not reflect immediately unless mutation finishes).
     # We can check mutations table or just wait a bit.
     import time
-    time.sleep(1) # Simple wait
+    time.sleep(1)  # Simple wait
 
     # Verify after
     after = client.query(f"SELECT category FROM items WHERE id = {item_id}").result_rows[0][0]
@@ -124,6 +125,7 @@ def main():
         print("Item successfully deleted.")
     else:
         print("Item still exists (mutation pending).")
+
 
 if __name__ == "__main__":
     main()

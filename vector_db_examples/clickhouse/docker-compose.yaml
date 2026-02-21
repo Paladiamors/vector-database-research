@@ -4,6 +4,8 @@ services:
     ports:
       - 8123:8123
       - 9000:9000
+    environment:
+      - CLICKHOUSE_PASSWORD=default
     ulimits:
       nofile:
         soft: 262144
