@@ -1,12 +1,14 @@
-from elasticsearch import Elasticsearch
 import json
 import os
-import time
+import sys
+
+# Add current directory to sys.path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from lib import ElasticsearchDB
 
 def main():
-    # Connect
-    print("Connecting to Elasticsearch...")
-    es = Elasticsearch("http://localhost:9200")
+    db = ElasticsearchDB()
 
     # Load dataset
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,71 +17,25 @@ def main():
         data = json.load(f)
 
     dim = len(data[0]["vector"])
-    index_name = "example_index"
 
-    # 1. Create Index (Schema)
-    if es.indices.exists(index=index_name):
-        es.indices.delete(index=index_name)
+    # Setup
+    db.setup(dim)
 
-    mapping = {
-        "properties": {
-            "text": {"type": "text"},
-            "category": {"type": "keyword"},
-            "vector": {
-                "type": "dense_vector",
-                "dims": dim,
-                "index": True,
-                "similarity": "cosine"
-            }
-        }
-    }
+    # Insert
+    db.insert_data(data)
 
-    es.indices.create(index=index_name, mappings=mapping)
-    print(f"Index '{index_name}' created.")
-
-    # 2. Index Documents
-    print(f"Indexing {len(data)} documents...")
-    actions = []
-    for item in data:
-        doc = {
-            "text": item["text"],
-            "category": item["metadata"]["category"],
-            "vector": item["vector"]
-        }
-        es.index(index=index_name, id=str(item["id"]), document=doc)
-
-    # Refresh to make searchable immediately
-    es.indices.refresh(index=index_name)
-    print("Documents indexed.")
-
-    # 3. Search (Vector Search via kNN)
+    # Search
     print("\n--- Vector Search Results (Top 3 similar to item 1) ---")
     query_vector = data[0]["vector"]
+    results = db.search(query_vector, limit=3)
 
-    # In ES 8.x, knn search is top-level parameter
-    response = es.search(
-        index=index_name,
-        knn={
-            "field": "vector",
-            "query_vector": query_vector,
-            "k": 3,
-            "num_candidates": 100
-        },
-        source=["text", "category"]
-    )
+    for res in results:
+        print(f"ID: {res['id']}, Score: {res['score']:.4f}, Text: {res['text']}, Category: {res['category']}")
 
-    for hit in response['hits']['hits']:
-        print(f"ID: {hit['_id']}, Score: {hit['_score']:.4f}, Text: {hit['_source']['text']}, Category: {hit['_source']['category']}")
-
-    # 4. Search with Metadata Filter
+    # Metadata Search
     print("\n--- Metadata Search Results (Category == 'tech') ---")
-
-    # Combine kNN with filter
-    # Or just use filter query without vector search?
-    # Prompt asks "search by meta data".
-    # Standard filter query
-    response = es.search(
-        index=index_name,
+    response = db.client.search(
+        index=db.index_name,
         query={
             "term": {
                 "category": "tech"
@@ -87,31 +43,22 @@ def main():
         },
         source=["text", "category"]
     )
-
     for hit in response['hits']['hits']:
         print(f"ID: {hit['_id']}, Text: {hit['_source']['text']}, Category: {hit['_source']['category']}")
 
-    # 5. Update Metadata
+    # Update
     print("\n--- Updating Metadata ---")
     item_id = str(data[0]["id"])
+    db.client.update(index=db.index_name, id=item_id, doc={"category": "food"})
 
-    # Verify before
-    res = es.get(index=index_name, id=item_id)
-    print(f"Before: {res['_source']['category']}")
-
-    # Update
-    es.update(index=index_name, id=item_id, doc={"category": "food"})
-
-    # Verify after
-    res = es.get(index=index_name, id=item_id)
+    res = db.client.get(index=db.index_name, id=item_id)
     print(f"After: {res['_source']['category']}")
 
-    # 6. Delete Document
+    # Delete
     print("\n--- Deleting Item ---")
-    es.delete(index=index_name, id=item_id)
+    db.delete_data(item_id)
 
-    # Verify
-    if not es.exists(index=index_name, id=item_id):
+    if not db.client.exists(index=db.index_name, id=item_id):
         print("Item successfully deleted.")
     else:
         print("Item still exists.")
