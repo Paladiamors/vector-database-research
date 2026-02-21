@@ -1,18 +1,22 @@
-import mysql.connector
 import json
 import os
-import numpy as np
+import sys
+
+# Add current directory to sys.path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    from lib import MariaDB
+except ImportError:
+    print("Could not import MariaDB lib. Ensure mariadb package is installed.")
+    sys.exit(1)
 
 def main():
-    # Connect
-    print("Connecting to MariaDB...")
-    conn = mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="password",
-        database="vectordb"
-    )
-    cursor = conn.cursor()
+    try:
+        db = MariaDB()
+    except ImportError:
+        print("mariadb package not installed. Skipping MariaDB example.")
+        return
 
     # Load dataset
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22,101 +26,60 @@ def main():
 
     dim = len(data[0]["vector"])
 
-    # 1. Create Table
-    cursor.execute("DROP TABLE IF EXISTS items")
-    # MariaDB 11.4 supports VECTOR type
-    cursor.execute(f"""
-        CREATE TABLE items (
-            id INT PRIMARY KEY,
-            text TEXT,
-            category VARCHAR(255),
-            embedding VECTOR({dim})
-        ) ENGINE=InnoDB
-    """)
-    print("Table created.")
-
-    # 2. Create Vector Index
-    # Syntax might vary slightly depending on preview status
-    # Standard syntax: ALTER TABLE t ADD VECTOR INDEX (col)
+    # Setup
     try:
-        cursor.execute("CREATE VECTOR INDEX vec_idx ON items(embedding)")
-        print("Vector index created.")
+        db.setup(dim)
     except Exception as e:
-        print(f"Vector index creation failed (might be implicit or not supported yet): {e}")
+        print(f"Setup failed: {e}")
+        return
 
-    # 3. Insert Data
-    print(f"Inserting {len(data)} items...")
-    sql = "INSERT INTO items (id, text, category, embedding) VALUES (%s, %s, %s, VEC_FromText(%s))"
+    # Insert
+    db.insert_data(data)
 
-    for item in data:
-        vec_str = str(item["vector"]) # Format as string '[1.0, 2.0, ...]'
-        cursor.execute(sql, (item["id"], item["text"], item["metadata"]["category"], vec_str))
-
-    conn.commit()
-    print("Data inserted.")
-
-    # 4. Search (Vector Search via Distance)
+    # Search
     print("\n--- Vector Search Results (Top 3 similar to item 1) ---")
-    query_vector = str(data[0]["vector"])
+    query_vector = data[0]["vector"]
+    results = db.search(query_vector, limit=3)
 
-    # Using VEC_DISTANCE_EUCLIDEAN (L2) or VEC_DISTANCE_COSINE?
-    # Usually euclidean is default distance for vector search
-    # If using Cosine similarity, use VEC_DISTANCE_COSINE? Or 1 - cosine
-    # MariaDB 11.4 usually supports VEC_DISTANCE
+    for row in results:
+        # id, text, category, dist
+        print(f"ID: {row[0]}, Text: {row[1]}, Category: {row[2]}, Distance: {row[3]:.4f}")
 
-    try:
-        cursor.execute(f"""
-            SELECT id, text, category, VEC_DISTANCE(embedding, VEC_FromText(%s)) as dist
-            FROM items
-            ORDER BY dist ASC
-            LIMIT 3
-        """, (query_vector,))
-
-        rows = cursor.fetchall()
-        for row in rows:
-            print(f"ID: {row[0]}, Distance: {row[3]:.4f}, Text: {row[1]}, Category: {row[2]}")
-
-    except Exception as e:
-        print(f"Vector search failed: {e}")
-
-    # 5. Search with Metadata Filter
+    # Metadata Search
     print("\n--- Metadata Search Results (Category == 'tech') ---")
-    cursor.execute("SELECT id, text, category FROM items WHERE category = 'tech'")
-
-    rows = cursor.fetchall()
-    for row in rows:
-        print(f"ID: {row[0]}, Text: {row[1]}, Category: {row[2]}")
-
-    # 6. Update Metadata
-    print("\n--- Updating Metadata ---")
-    item_id = data[0]["id"]
-
-    # Verify before
-    cursor.execute("SELECT category FROM items WHERE id = %s", (item_id,))
-    print(f"Before: {cursor.fetchone()[0]}")
+    # For metadata search we can use generic SQL
+    if db.conn:
+        cur = db.conn.cursor()
+        cur.execute("SELECT id, text, category FROM items WHERE category = 'tech'")
+        for row in cur:
+            print(f"ID: {row[0]}, Text: {row[1]}, Category: {row[2]}")
+        cur.close()
 
     # Update
-    cursor.execute("UPDATE items SET category = 'food' WHERE id = %s", (item_id,))
-    conn.commit()
+    print("\n--- Updating Metadata ---")
+    item_id = data[0]["id"]
+    if db.conn:
+        cur = db.conn.cursor()
+        cur.execute("UPDATE items SET category = 'food' WHERE id = ?", (item_id,))
 
-    # Verify after
-    cursor.execute("SELECT category FROM items WHERE id = %s", (item_id,))
-    print(f"After: {cursor.fetchone()[0]}")
+        cur.execute("SELECT category FROM items WHERE id = ?", (item_id,))
+        print(f"After: {cur.fetchone()[0]}")
+        cur.close()
 
-    # 7. Delete Item
+    # Delete
     print("\n--- Deleting Item ---")
-    cursor.execute("DELETE FROM items WHERE id = %s", (item_id,))
-    conn.commit()
+    db.delete_data(item_id)
 
-    # Verify
-    cursor.execute("SELECT id FROM items WHERE id = %s", (item_id,))
-    if cursor.fetchone() is None:
-        print("Item successfully deleted.")
-    else:
-        print("Item still exists.")
+    if db.conn:
+        cur = db.conn.cursor()
+        cur.execute("SELECT count(*) FROM items WHERE id = ?", (item_id,))
+        if cur.fetchone()[0] == 0:
+            print("Item successfully deleted.")
+        else:
+            print("Item still exists.")
+        cur.close()
 
-    cursor.close()
-    conn.close()
+    db.conn.close()
 
 if __name__ == "__main__":
     main()
