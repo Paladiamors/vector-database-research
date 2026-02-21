@@ -9,10 +9,18 @@ class OpenSearchDB:
 
     def connect(self):
         print(f"Connecting to OpenSearch at {self.host}:{self.port}...")
+        # User requested specific password. Assuming 'admin' user.
+        # Docker env: OPENSEARCH_INITIAL_ADMIN_PASSWORD=FJJLGK45!s
+        # Docker env: plugins.security.ssl.http.enabled=false (implies http)
+
         self.client = OpenSearch(
             hosts=[{'host': self.host, 'port': self.port}],
             http_compress=True,
-            use_ssl=False
+            http_auth=('admin', 'FJJLGK45!s'),
+            use_ssl=False,
+            verify_certs=False,
+            ssl_assert_hostname=False,
+            ssl_show_warn=False
         )
 
     def check_ready(self):
@@ -43,7 +51,7 @@ class OpenSearchDB:
                         "dimension": dim,
                         "method": {
                              "name": "hnsw",
-                             "engine": "nmslib"
+                             "engine": "faiss" # Changed from nmslib
                         }
                     },
                     "text": {"type": "text"},

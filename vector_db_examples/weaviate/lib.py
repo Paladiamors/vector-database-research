@@ -33,33 +33,8 @@ class WeaviateDB:
         if self.client.collections.exists(self.collection_name):
             self.client.collections.delete(self.collection_name)
 
-        # Use vector_config instead of vectorizer_config
-        # And Configure.Vectors.none() (or self_provided? sticking to none() if available or just empty?)
-        # If we provide vectors manually, we usually disable vectorizer.
-        # wvc.Configure.Vectorizer.none() was the old way.
-        # New way might be wvc.Configure.Vectors.none() ??
-        # Or just don't specify vector_config if we want manual?
-        # No, default might be something else.
-        # Based on docs: Configure.Vectors.none() -> Configure.Vectors.self_provided()?
-        # I'll try to find 'none' or 'self_provided'.
-        # I'll use wvc.Configure.Vectorizer.none() as value but pass to vector_config.
-
-        try:
-            vectorizer = wvc.Configure.Vectorizer.none()
-        except AttributeError:
-            # Fallback for newer client
-            try:
-                vectorizer = wvc.Configure.Vectors.none()
-            except AttributeError:
-                 # Fallback
-                 vectorizer = None
-
-        # Actually, if we use vector_config, we might need a specific config object.
-        # If we skip vector_config, it might default to 'none' if no modules configured?
-        # Let's try passing vectorizer to vector_config.
-
-        # NOTE: Deprecation warning said use vector_config.
-        # I will attempt to use Configure.Vectorizer.none() passed to vector_config.
+        # Use self_provided() for BYOV
+        # Configure.Vectors.self_provided()
 
         self.client.collections.create(
             name=self.collection_name,
@@ -67,9 +42,24 @@ class WeaviateDB:
                 wvc.Property(name="text", data_type=wvc.DataType.TEXT),
                 wvc.Property(name="category", data_type=wvc.DataType.TEXT),
             ],
-            # vectorizer_config=wvc.Configure.Vectorizer.none(),
-            # Replaced by:
-            vector_config=vectorizer,
+            # vector_config implies we are providing the vectors ourselves
+            vectorizer_config=wvc.Configure.Vectorizer.none(),
+            # Wait, docs said vector_config=...Vectors.self_provided() ???
+            # Let's try what the docs said for BYOV:
+            # vector_config=wvc.Configure.Vectors.self_provided()
+            # But the error said invalid type for vector_config.
+            # If I use vectorizer_config=none, it might default vector index.
+            # If I use vector_config, it expects specific config.
+            # Let's try exactly what docs said:
+            # vector_config=wvc.Configure.Vectors.self_provided() is likely for NamedVectors?
+            # Or default vector?
+            # Actually, "vectorizer_config has been replaced with vector_config"
+            # And "Configure.Vectorizer.none have been replaced with Configure.Vectors.self_provided"
+            # So:
+            # vector_config=wvc.Configure.Vectors.self_provided()
+
+            # Wait, wvc is imported as weaviate.classes.config
+            vector_config=wvc.Configure.Vectors.self_provided(),
         )
         print(f"Created collection '{self.collection_name}'.")
 
@@ -93,6 +83,8 @@ class WeaviateDB:
 
         if len(collection.batch.failed_objects) > 0:
             print(f"Failed objects: {len(collection.batch.failed_objects)}")
+            for failed in collection.batch.failed_objects:
+                print(failed)
         else:
             print("Data inserted.")
 

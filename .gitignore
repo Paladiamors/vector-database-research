@@ -1,0 +1,3 @@
+__pycache__/
+*.pyc
+vector_db_examples/data/dataset_large.json

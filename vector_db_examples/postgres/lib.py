@@ -65,7 +65,7 @@ class PostgresDB:
         if not self.conn:
             self.connect()
 
-        # Ensure vector is registered if not already (e.g. if connected but setup not called in this session)
+        # Ensure vector is registered if not already
         try:
             register_vector(self.conn)
         except Exception:
@@ -93,10 +93,11 @@ class PostgresDB:
 
         cur = self.conn.cursor()
         # Cosine distance: <=>
+        # Cast the parameter to vector: %s::vector
         cur.execute(f"""
-            SELECT id, text, metadata, 1 - (embedding <=> %s) as similarity
+            SELECT id, text, metadata, 1 - (embedding <=> %s::vector) as similarity
             FROM items
-            ORDER BY embedding <=> %s
+            ORDER BY embedding <=> %s::vector
             LIMIT {limit}
         """, (query_vector, query_vector))
 

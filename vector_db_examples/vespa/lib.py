@@ -104,7 +104,7 @@ class VespaDB:
 
         self.app.feed_iterable(
             schema="doc",
-            iter_data=documents,
+            iter=documents, # Changed from iter_data to iter
             callback=callback
         )
         print("Data fed.")

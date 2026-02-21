@@ -62,12 +62,23 @@ class QdrantDB:
         if not self.client:
             self.connect()
 
-        # Use search (or query_points if needed)
-        search_result = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_vector,
-            limit=limit
-        )
+        # Try query_points (newer) or search (older)
+        try:
+            search_result = self.client.query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                limit=limit
+            ).points
+        except AttributeError:
+             # Fallback if query_points not found (unlikely for newer, but maybe older?)
+             # Or if search is what's needed but missing?
+             # If client doesn't have search, it must be newer.
+             # But older client had search.
+             # The error said 'QdrantClient' object has no attribute 'search'.
+             # So it is likely a very new version where search is removed or changed?
+             # Or maybe it's `search` via `points` api?
+             # Let's assume query_points works for now.
+             raise
 
         results = []
         for hit in search_result:
